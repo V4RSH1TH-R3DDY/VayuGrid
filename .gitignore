@@ -1,0 +1,19 @@
+# Data files
+data/
+*.csv
+*.tsv
+*.json
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pkl
+*.joblib
+*.db
+*.sqlite
+
+Varshith_Workstream_README.md
+
+.env
