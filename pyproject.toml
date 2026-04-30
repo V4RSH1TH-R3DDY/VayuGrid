@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vayugrid"
+version = "0.1.0"
+description = "Simulation and AI infrastructure for the VayuGrid smart energy grid project."
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "numpy>=1.26,<3",
+  "pandas>=2.2,<3",
+  "pyarrow>=20,<21",
+  "requests>=2.32,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.10,<2",
+  "pytest>=8.2,<9",
+  "ruff>=0.5,<0.13",
+]
+
+[tool.setuptools]
+packages = ["ai", "simulator"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["ai", "simulator"]
+ignore_missing_imports = true
+warn_unused_configs = true

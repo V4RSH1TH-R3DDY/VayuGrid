@@ -40,7 +40,10 @@ CITIES = {
 }
 
 YEARS = ["2016", "2017", "2018", "2019", "2020"]
-ATTRIBUTES = "ghi,dni,dhi,air_temperature,wind_speed,relative_humidity,cloud_type,solar_zenith_angle"
+ATTRIBUTES = (
+    "ghi,dni,dhi,air_temperature,wind_speed,relative_humidity,"
+    "cloud_type,solar_zenith_angle"
+)
 OUTPUT_DIR = "data/nsrdb_himawari"
 
 
@@ -130,7 +133,8 @@ def wait_and_download_zip(download_url: str, city: str, year: str) -> bytes:
 
         if response.status_code in (403, 404, 425, 429, 500, 502, 503, 504):
             print(
-                f"[{city} {year}] file not ready yet (attempt {attempt}/60, status={response.status_code})."
+                f"[{city} {year}] file not ready yet "
+                f"(attempt {attempt}/60, status={response.status_code})."
             )
             time.sleep(10)
             continue

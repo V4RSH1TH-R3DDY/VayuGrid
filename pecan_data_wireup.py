@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 PECAN_REGION_FOLDERS = {
     "austin": "1minute_data_austin",
     "california": "1minute_data_california",
@@ -174,7 +173,12 @@ def load_nsrdb_ghi(data_root: Path, city: str, year: int) -> pd.DataFrame:
         errors="coerce",
     )
 
-    out = pd.DataFrame({"timestamp_ist": ts, "ghi_wm2": pd.to_numeric(nsrdb["GHI"], errors="coerce")})
+    out = pd.DataFrame(
+        {
+            "timestamp_ist": ts,
+            "ghi_wm2": pd.to_numeric(nsrdb["GHI"], errors="coerce"),
+        }
+    )
     out = out.dropna(subset=["timestamp_ist", "ghi_wm2"]).sort_values("timestamp_ist")
     out = out.drop_duplicates(subset=["timestamp_ist"])
     out = out.set_index("timestamp_ist").resample("1min").interpolate(method="time")
@@ -269,7 +273,12 @@ def main() -> None:
     else:
         wired["pv_kw"] = wired["pv_kw_raw"]
 
-    save_outputs(frame=wired, output_dir=output_dir, city=INDIA_CITY_FOLDERS[args.city], year=args.year)
+    save_outputs(
+        frame=wired,
+        output_dir=output_dir,
+        city=INDIA_CITY_FOLDERS[args.city],
+        year=args.year,
+    )
 
 
 if __name__ == "__main__":
