@@ -19,6 +19,7 @@ Varshith_Workstream_README.md
 .env
 
 # Python artifacts
+.tmp/
 __pycache__/
 *.py[cod]
 .pytest_cache/

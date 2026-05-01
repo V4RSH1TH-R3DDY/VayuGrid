@@ -1,4 +1,4 @@
-from . import admin, auth, community, dashboards, nodes, privacy, signals
+from . import admin, auth, community, dashboards, nodes, privacy, signals, trading
 
 __all__ = [
     "admin",
@@ -8,4 +8,5 @@ __all__ = [
     "nodes",
     "privacy",
     "signals",
+    "trading",
 ]

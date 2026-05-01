@@ -57,11 +57,35 @@ class TradeRecordIn(BaseModel):
     metadata: Dict[str, Any] | None = None
 
 
+class TradeOrderIn(BaseModel):
+    side: str
+    quantity_kwh: float = Field(gt=0, le=5)
+    limit_price_inr_per_kwh: float = Field(ge=0)
+    metadata: Dict[str, Any] | None = None
+
+
+class TradeOrderOut(BaseModel):
+    order_id: str
+    node_id: int
+    side: str
+    quantity_kwh: float
+    remaining_kwh: float
+    limit_price_inr_per_kwh: float
+    status: str
+    created_at: datetime
+    expires_at: datetime
+    matched_at: datetime | None = None
+    metadata: Dict[str, Any] | None = None
+
+
 class SignalIn(BaseModel):
     signal_type: str
     severity: float = Field(ge=0, le=1)
     target_node_ids: List[int]
     reason: str
+    recommended_price_floor_inr_per_kwh: float | None = Field(default=None, ge=0)
+    recommended_price_cap_inr_per_kwh: float | None = Field(default=None, ge=0)
+    expires_at: datetime | None = None
     metadata: Dict[str, Any] | None = None
 
 

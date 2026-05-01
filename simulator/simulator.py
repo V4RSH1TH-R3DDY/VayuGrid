@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-import json
 
 import numpy as np
 import pandas as pd
@@ -280,13 +280,17 @@ class GridSimulator:
 
             battery_power = np.zeros(len(self.home_assets), dtype=float)
             battery_soc = np.zeros(len(self.home_assets), dtype=float)
+            overload_fault_active = FAULT_OVERLOAD in fault_state.active_faults
             for idx, asset in enumerate(self.home_assets):
-                batt_kw, soc, _ = self._dispatch_battery(
-                    asset,
-                    load_kw[idx],
-                    pv_kw[idx],
-                    ev_kw[idx],
-                )
+                if overload_fault_active:
+                    batt_kw, soc = 0.0, asset.battery_soc_kwh
+                else:
+                    batt_kw, soc, _ = self._dispatch_battery(
+                        asset,
+                        load_kw[idx],
+                        pv_kw[idx],
+                        ev_kw[idx],
+                    )
                 battery_power[idx] = batt_kw
                 battery_soc[idx] = soc
                 asset.battery_soc_kwh = soc

@@ -76,8 +76,8 @@ class GridSimulatorTest(unittest.TestCase):
             result.transformer_timeseries["maintenance_mode"]
         ]
         self.assertFalse(maintenance_rows.empty)
-        self.assertTrue((maintenance_rows["grid_available"] == False).all())
-        self.assertTrue((maintenance_rows["islanding_triggered"] == False).all())
+        self.assertTrue((~maintenance_rows["grid_available"]).all())
+        self.assertTrue((~maintenance_rows["islanding_triggered"]).all())
 
     def test_grid_outage_triggers_islanding(self) -> None:
         raw = self._build_config()
@@ -95,10 +95,10 @@ class GridSimulatorTest(unittest.TestCase):
         result = GridSimulator(config).run()
 
         outage_rows = result.transformer_timeseries[
-            result.transformer_timeseries["grid_available"] == False
+            ~result.transformer_timeseries["grid_available"]
         ]
         self.assertFalse(outage_rows.empty)
-        self.assertTrue((outage_rows["islanding_triggered"] == True).all())
+        self.assertTrue(outage_rows["islanding_triggered"].all())
 
     def test_overload_fault_counts_transformer_overload_event(self) -> None:
         raw = self._build_config()

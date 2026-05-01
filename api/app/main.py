@@ -13,7 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from .config import settings
 from .db import fetch_all, pool
 from .rate_limit import limiter
-from .routers import admin, auth, community, dashboards, nodes, privacy, signals
+from .routers import admin, auth, community, dashboards, nodes, privacy, signals, trading
 from .security import decode_access_token
 
 app = FastAPI(title="VayuGrid API", version="0.1.0")
@@ -33,6 +33,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(nodes.router, prefix="/api")
 app.include_router(signals.router, prefix="/api")
+app.include_router(trading.router, prefix="/api")
 app.include_router(privacy.router, prefix="/api")
 app.include_router(community.router, prefix="/api")
 app.include_router(dashboards.router, prefix="/api")

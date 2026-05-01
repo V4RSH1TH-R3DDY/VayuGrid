@@ -2,23 +2,23 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 
 
-class TradeOrderSide(StrEnum):
+class TradeOrderSide(str, Enum):
     BUY = "buy"
     SELL = "sell"
 
 
-class TradeOrderStatus(StrEnum):
+class TradeOrderStatus(str, Enum):
     OPEN = "open"
     MATCHED = "matched"
     CANCELLED = "cancelled"
     SETTLED = "settled"
 
 
-class NeighborhoodSignalType(StrEnum):
+class NeighborhoodSignalType(str, Enum):
     THROTTLE = "throttle"
     PRE_COOL = "pre_cool"
     ISLAND = "island"

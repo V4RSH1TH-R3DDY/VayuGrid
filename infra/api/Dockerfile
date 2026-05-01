@@ -6,7 +6,10 @@ ENV PYTHONUNBUFFERED=1
 COPY pyproject.toml README.md ./
 COPY ai ./ai
 COPY api ./api
+COPY mesh ./mesh
+COPY services ./services
 COPY simulator ./simulator
+COPY trading ./trading
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .
 

@@ -246,7 +246,8 @@ def homeowner_summary(
         )
         or {}
     )
-    to_kwh = lambda value: round((value or 0) / 60, 3)
+    def to_kwh(value: float | None) -> float:
+        return round((value or 0) / 60, 3)
 
     latest = fetch_one(
         "SELECT * FROM node_telemetry WHERE node_id = %s ORDER BY ts DESC LIMIT 1",
@@ -265,10 +266,26 @@ def homeowner_summary(
         fetch_one(
             """
         SELECT
-            COALESCE(SUM(CASE WHEN seller_node_id = %s THEN quantity_kwh ELSE 0 END), 0) AS sold_kwh,
-            COALESCE(SUM(CASE WHEN buyer_node_id = %s THEN quantity_kwh ELSE 0 END), 0) AS bought_kwh,
-            COALESCE(SUM(CASE WHEN seller_node_id = %s THEN quantity_kwh * cleared_price_inr_per_kwh ELSE 0 END), 0) AS revenue_inr,
-            COALESCE(SUM(CASE WHEN buyer_node_id = %s THEN quantity_kwh * cleared_price_inr_per_kwh ELSE 0 END), 0) AS cost_inr
+            COALESCE(
+                SUM(CASE WHEN seller_node_id = %s THEN quantity_kwh ELSE 0 END), 0
+            ) AS sold_kwh,
+            COALESCE(
+                SUM(CASE WHEN buyer_node_id = %s THEN quantity_kwh ELSE 0 END), 0
+            ) AS bought_kwh,
+            COALESCE(
+                SUM(CASE
+                    WHEN seller_node_id = %s
+                    THEN quantity_kwh * cleared_price_inr_per_kwh
+                    ELSE 0
+                END), 0
+            ) AS revenue_inr,
+            COALESCE(
+                SUM(CASE
+                    WHEN buyer_node_id = %s
+                    THEN quantity_kwh * cleared_price_inr_per_kwh
+                    ELSE 0
+                END), 0
+            ) AS cost_inr
         FROM trade_records
         WHERE ts >= date_trunc('day', now()) AND (buyer_node_id = %s OR seller_node_id = %s)
         """,
@@ -356,7 +373,9 @@ def community_summary(
         """
         SELECT AVG(total_load_kw) AS avg_load_kw
         FROM (
-            SELECT to_timestamp(floor(extract(epoch from ts) / 300) * 300) AT TIME ZONE 'UTC' AS bucket,
+            SELECT
+                to_timestamp(floor(extract(epoch from ts) / 300) * 300)
+                    AT TIME ZONE 'UTC' AS bucket,
                    SUM(household_load_kw) AS total_load_kw
             FROM node_telemetry
             WHERE ts >= now() - interval '1 hour'

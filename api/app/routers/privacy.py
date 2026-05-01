@@ -15,7 +15,11 @@ router = APIRouter(tags=["privacy"])
 
 @router.get("/privacy/consent/{node_id}")
 @limiter.limit("100/minute")
-def get_consent(request: Request, node_id: int, _: UserClaims = Depends(require_roles(["operator", "homeowner"]))):
+def get_consent(
+    request: Request,
+    node_id: int,
+    _: UserClaims = Depends(require_roles(["operator", "homeowner"])),
+) -> dict:
     record = fetch_one(
         """
         SELECT node_id, consented, consent_version, categories, updated_at

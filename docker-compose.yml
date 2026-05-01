@@ -5,7 +5,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-vayugrid}
       POSTGRES_USER: ${POSTGRES_USER:-vayugrid}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-vayugrid}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -48,7 +48,7 @@ services:
       ]
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-vayugrid}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-vayugrid}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS is required}
     ports:
       - "${RABBITMQ_PORT:-5672}:5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
@@ -68,7 +68,7 @@ services:
       dockerfile: infra/mlflow/Dockerfile
     container_name: vayugrid-mlflow
     environment:
-      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-vayugrid}:${POSTGRES_PASSWORD:-vayugrid}@postgres:5432/${POSTGRES_DB:-vayugrid}
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-vayugrid}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-vayugrid}
       MLFLOW_DEFAULT_ARTIFACT_ROOT: /mlruns
     command:
       [
@@ -79,7 +79,7 @@ services:
         "--port",
         "5000",
         "--backend-store-uri",
-        "postgresql://${POSTGRES_USER:-vayugrid}:${POSTGRES_PASSWORD:-vayugrid}@postgres:5432/${POSTGRES_DB:-vayugrid}",
+        "postgresql://${POSTGRES_USER:-vayugrid}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-vayugrid}",
         "--artifacts-destination",
         "/mlruns",
       ]
@@ -111,7 +111,7 @@ services:
     container_name: vayugrid-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
@@ -129,13 +129,29 @@ services:
       dockerfile: infra/api/Dockerfile
     container_name: vayugrid-api
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-vayugrid}:${POSTGRES_PASSWORD:-vayugrid}@postgres:5432/${POSTGRES_DB:-vayugrid}
-      JWT_SECRET: ${JWT_SECRET:-change-me}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vayugrid}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-vayugrid}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       CORS_ORIGINS: http://localhost:5173
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
       postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  matching-engine:
+    build:
+      context: .
+      dockerfile: infra/api/Dockerfile
+    container_name: vayugrid-matching-engine
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-vayugrid}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-vayugrid}
+      MATCHING_INTERVAL_SECONDS: ${MATCHING_INTERVAL_SECONDS:-10}
+    command: ["python", "-m", "services.matching_engine"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     restart: unless-stopped
 

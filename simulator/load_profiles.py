@@ -185,7 +185,8 @@ class LoadProfileLibrary:
         marked_dates = set(self.config.cricket_match_dates)
         return np.array(
             [
-                (ts.date().isoformat() in marked_dates) or (ts.dayofweek >= 5 and 19 <= ts.hour < 23)
+                (ts.date().isoformat() in marked_dates)
+                or (ts.dayofweek >= 5 and 19 <= ts.hour < 23)
                 for ts in time_index
             ],
             dtype=bool,
@@ -278,7 +279,9 @@ class LoadProfileLibrary:
             subset = frame[frame["home_id"].astype(int) == int(source_home)][
                 ["timestamp_ist", "load_kw", "pv_kw", "ev_kw"]
             ].copy()
-            subset = subset.set_index("timestamp_ist").reindex(time_index).interpolate(method="time")
+            subset = (
+                subset.set_index("timestamp_ist").reindex(time_index).interpolate(method="time")
+            )
             subset = subset.ffill().bfill().fillna(0.0)
 
             raw_load = subset["load_kw"].to_numpy(dtype=float)

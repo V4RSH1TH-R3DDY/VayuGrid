@@ -43,6 +43,18 @@ The FastAPI service exposes dashboard and node endpoints under `/api`, plus a
 WebSocket stream at `/ws/stream` (every 5 seconds). See `docs/api_phase6.md` for
 endpoint details.
 
+## Phase 4 Mesh & P2P Trading
+
+The repo now includes the Phase 4 trading layer:
+
+- Continuous Double Auction order matching every 10 seconds
+- Dynamic GNN-driven market floor/cap state
+- Island-mode market suspension
+- RabbitMQ mesh message contracts for local development
+- Hash-linked Aya Wallet Ledger records
+
+See `docs/api_phase4.md` for endpoint and runtime details.
+
 Default demo users (override with `DASHBOARD_USERS_JSON` in the API container):
 - Operator: `tony / operator`
 - Homeowner: `reggie / homeowner`
