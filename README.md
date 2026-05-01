@@ -12,6 +12,8 @@ plan:
 - RabbitMQ for message transport
 - MLflow for experiment tracking
 - Prometheus and Grafana for observability
+- FastAPI backend for dashboards and nodes
+- React dashboards for operator, homeowner, and community views
 
 Start everything with:
 
@@ -29,9 +31,25 @@ Default local endpoints:
 - MLflow: `http://localhost:5000`
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000`
+- API: `http://localhost:8000` (OpenAPI docs at `/docs`)
+- Dashboards: `http://localhost:5173`
 
 The TimescaleDB container bootstraps the initial telemetry, trade, and signal
 tables from `infra/postgres/init/01-timescaledb.sql`.
+
+## Phase 6 API & Dashboards
+
+The FastAPI service exposes dashboard and node endpoints under `/api`, plus a
+WebSocket stream at `/ws/stream` (every 5 seconds). See `docs/api_phase6.md` for
+endpoint details.
+
+Default demo users (override with `DASHBOARD_USERS_JSON` in the API container):
+- Operator: `tony / operator`
+- Homeowner: `reggie / homeowner`
+- Community: `luigi / community`
+
+Node API keys can be minted via `POST /api/admin/nodes/{node_id}/api-key` using an
+operator JWT.
 
 ## Python Tooling
 

@@ -33,6 +33,10 @@ mlruns/
 .venv/
 venv/
 
+# Node artifacts
+node_modules/
+frontend/dist/
+
 # Notebook/editor artifacts
 .ipynb_checkpoints/
 .DS_Store

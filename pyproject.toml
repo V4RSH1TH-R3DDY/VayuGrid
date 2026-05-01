@@ -13,6 +13,11 @@ dependencies = [
   "pandas>=2.2,<3",
   "pyarrow>=20,<21",
   "requests>=2.32,<3",
+  "fastapi>=0.111,<0.112",
+  "uvicorn[standard]>=0.30,<0.31",
+  "python-jose[cryptography]>=3.3,<4",
+  "slowapi>=0.1.9,<0.2",
+  "psycopg[binary]>=3.2,<4",
 ]
 
 [project.optional-dependencies]
@@ -23,7 +28,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["ai", "simulator"]
+packages = ["ai", "simulator", "api", "api.app", "api.app.routers"]
 
 [tool.ruff]
 line-length = 100
@@ -37,6 +42,6 @@ testpaths = ["tests"]
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["ai", "simulator"]
+packages = ["ai", "simulator", "api", "api.app", "api.app.routers"]
 ignore_missing_imports = true
 warn_unused_configs = true
