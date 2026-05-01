@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from psycopg.types.json import Json
 
+from ..config import settings
 from ..db import execute_many, fetch_one
 from ..rate_limit import limiter
 from ..schemas import TelemetryIn, TradeRecordIn, TransformerReadingIn
@@ -35,6 +37,16 @@ def ingest_telemetry(
     payload: List[TelemetryIn],
     node_id: int = Depends(get_node_id_from_api_key),
 ) -> dict:
+    _now = datetime.now(timezone.utc)
+    for item in payload:
+        _ts = item.ts.replace(tzinfo=timezone.utc) if item.ts.tzinfo is None else item.ts
+        _age = (_now - _ts).total_seconds()
+        if _age > settings.telemetry_replay_window_seconds or _age < -60:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Telemetry timestamp out of acceptable window for node {item.node_id}",
+            )
+
     rows = []
     for item in payload:
         if item.node_id != node_id:
@@ -42,6 +54,14 @@ def ingest_telemetry(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Node ID mismatch for API key",
             )
+        # --- data precision anonymization ---
+        if item.battery_soc_kwh is not None:
+            item.battery_soc_kwh = round(item.battery_soc_kwh, 2)
+        if item.household_load_kw is not None:
+            # bucket to nearest 0.5 kW
+            item.household_load_kw = round(round(item.household_load_kw / 0.5) * 0.5, 2)
+        if item.solar_output_kw is not None:
+            item.solar_output_kw = round(item.solar_output_kw, 3)
         rows.append(
             (
                 item.ts,
@@ -69,6 +89,35 @@ def ingest_telemetry(
         """,
         rows,
     )
+
+    # --- anomaly detection ---
+    try:
+        from ..anomaly import detector
+        from ..breach import notifier
+
+        for item in payload:
+            reading = {
+                "battery_soc_kwh": item.battery_soc_kwh,
+                "solar_output_kw": item.solar_output_kw,
+                "household_load_kw": item.household_load_kw,
+                "ev_charge_kw": item.ev_charge_kw,
+                "net_grid_kw": item.net_grid_kw,
+                "voltage_pu": item.voltage_pu,
+            }
+            is_bad, score = detector.is_anomalous(reading, node_id=item.node_id)
+            if is_bad:
+                notifier.record_event(
+                    "anomaly",
+                    min(abs(score) * 2, 1.0),
+                    f"Anomalous telemetry from node {item.node_id} (score={score:.4f})",
+                    node_id=item.node_id,
+                    metadata={"score": score, "features": reading},
+                )
+    except Exception as _exc:
+        import logging as _log
+
+        _log.getLogger(__name__).warning("Anomaly detection error (non-fatal): %s", _exc)
+
     return {"inserted": len(rows)}
 
 

@@ -18,12 +18,14 @@ class MatchingEngine:
         ledger: AyaLedger | None = None,
         max_orders_per_minute: int = 10,
         default_order_ttl_seconds: int = 60,
+        max_queue_depth: int = 500,
     ) -> None:
         self.market_state = market_state or MarketState(updated_at=datetime.now(timezone.utc))
         self.order_book = order_book or OrderBook()
         self.ledger = ledger or AyaLedger()
         self.max_orders_per_minute = max_orders_per_minute
         self.default_order_ttl_seconds = default_order_ttl_seconds
+        self.max_queue_depth = max_queue_depth
         self._node_order_times: dict[int, deque[float]] = defaultdict(deque)
 
     def update_market_state(self, market_state: MarketState) -> None:
@@ -51,7 +53,13 @@ class MatchingEngine:
             metadata=metadata or {},
         )
 
-        if not self.market_state.accepts_orders:
+        depth = len(self.order_book.open_orders)
+        if depth >= self.max_queue_depth:
+            order.status = OrderStatus.REJECTED
+            order.metadata["rejection_reason"] = (
+                f"circuit breaker open: queue depth {depth} >= {self.max_queue_depth}"
+            )
+        elif not self.market_state.accepts_orders:
             order.status = OrderStatus.REJECTED
             order.metadata["rejection_reason"] = f"market is {self.market_state.mode.value}"
         elif self._is_rate_limited(node_id):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import os
@@ -20,18 +21,39 @@ bearer_scheme = HTTPBearer(auto_error=False)
 class Encryption:
     @staticmethod
     def encrypt(data: str) -> str:
-        aesgcm = AESGCM(settings.encryption_key.encode())
+        aesgcm = AESGCM(get_encryption_key_bytes())
         nonce = os.urandom(12)
         ct = aesgcm.encrypt(nonce, data.encode(), None)
         return (nonce + ct).hex()
 
     @staticmethod
     def decrypt(hex_data: str) -> str:
-        data = bytes.fromhex(hex_data)
-        nonce = data[:12]
-        ct = data[12:]
-        aesgcm = AESGCM(settings.encryption_key.encode())
+        raw = bytes.fromhex(hex_data)
+        nonce = raw[:12]
+        ct = raw[12:]
+        aesgcm = AESGCM(get_encryption_key_bytes())
         return aesgcm.decrypt(nonce, ct, None).decode()
+
+
+def get_encryption_key_bytes() -> bytes:
+    """Return the AES-GCM key bytes.
+
+    Tries Vault first (if VAULT_ADDR and VAULT_TOKEN are configured).
+    Falls back to the ENCRYPTION_KEY env var.
+    """
+    from .config import settings
+
+    if settings.vault_url and settings.vault_token:
+        try:
+            from .vault_client import VaultClient
+
+            client = VaultClient(settings.vault_url, settings.vault_token)
+            raw = client.get_secret("vayugrid", "encryption-key").get("value", "")
+            if raw:
+                return base64.b64decode(raw)
+        except Exception:
+            pass  # fall through to env var
+    return base64.b64decode(settings.encryption_key)
 
 
 class UserClaims(BaseModel):

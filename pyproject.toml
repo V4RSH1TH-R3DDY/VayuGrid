@@ -22,6 +22,9 @@ dependencies = [
   "psycopg-pool>=3.2,<4",
   "aio-pika>=9.4,<10",
   "redis>=5.0,<6",
+  "scikit-learn>=1.5,<2",
+  "hvac>=2.3,<3",
+  "apscheduler>=3.10,<4",
 ]
 
 [project.optional-dependencies]

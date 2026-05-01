@@ -3,18 +3,20 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+from .anomaly import detector
+from .breach import notifier
 from .config import settings
 from .db import fetch_all, pool
 from .rate_limit import limiter
 from .routers import admin, auth, community, dashboards, nodes, privacy, signals, trading
-from .security import decode_access_token
+from .security import UserClaims, decode_access_token, require_roles
 
 app = FastAPI(title="VayuGrid API", version="0.1.0")
 
@@ -42,6 +44,14 @@ app.include_router(dashboards.router, prefix="/api")
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/api/security/status")
+def security_status(_: UserClaims = Depends(require_roles(["operator"]))) -> dict:
+    return {
+        "anomaly_detector_trained": detector.is_trained,
+        "recent_events": notifier.get_recent_events(limit=20),
+    }
 
 
 def _live_snapshot() -> dict:
@@ -114,9 +124,31 @@ async def ws_stream(websocket: WebSocket) -> None:
         return
 
 
+async def _breach_notification_loop() -> None:
+    while True:
+        await asyncio.sleep(900)  # 15 minutes
+        try:
+            await asyncio.to_thread(notifier.notify_pending)
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning("Breach notification loop error: %s", exc)
+
+
 @app.on_event("startup")
-def startup() -> None:
-    pool.open(wait=True, timeout=30)
+async def startup() -> None:
+    await asyncio.to_thread(pool.open, wait=True, timeout=30)
+
+    # Train anomaly detector from existing data (non-fatal if DB has no data yet)
+    try:
+        detector.fit_from_db()
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning("Anomaly detector training failed at startup: %s", exc)
+
+    # Start the breach notification background loop
+    asyncio.get_event_loop().create_task(_breach_notification_loop())
 
 
 @app.on_event("shutdown")

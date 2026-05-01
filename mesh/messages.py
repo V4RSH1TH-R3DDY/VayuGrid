@@ -65,6 +65,24 @@ class GossipMessage:
             signature=self.signature,
         )
 
+    def is_replay(self, window_seconds: int = 30) -> bool:
+        """Return True if this message is outside the acceptance time window.
+
+        A message is a replay if:
+        - it is older than ``window_seconds`` (stale / replayed message), OR
+        - its timestamp is more than 5 seconds in the future (clock skew / forged timestamp).
+        """
+        from datetime import timezone
+
+        now = datetime.now(timezone.utc)
+        created = (
+            self.created_at.replace(tzinfo=timezone.utc)
+            if self.created_at.tzinfo is None
+            else self.created_at
+        )
+        age = (now - created).total_seconds()
+        return age > window_seconds or age < -5
+
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["kind"] = self.kind.value

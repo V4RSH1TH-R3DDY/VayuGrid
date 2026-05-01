@@ -20,9 +20,12 @@ class RabbitMQMeshBus:
         self,
         amqp_url: str,
         exchange_name: str = "vayugrid.mesh",
+        replay_window_seconds: int = 30,
     ) -> None:
         self.amqp_url = amqp_url
         self.exchange_name = exchange_name
+        self.replay_window_seconds = replay_window_seconds
+        self._seen: dict[str, float] = {}
 
     @staticmethod
     def routing_key(kind: MessageKind) -> str:
@@ -31,6 +34,26 @@ class RabbitMQMeshBus:
     @staticmethod
     def encode(message: GossipMessage) -> bytes:
         return json.dumps(message.to_dict(), sort_keys=True, default=str).encode("utf-8")
+
+    def validate_and_record(self, message: GossipMessage) -> bool:
+        """Return False (reject) if the message is a replay or duplicate; True if valid.
+
+        Side-effect: records the message_id for future dedup checks and prunes
+        stale entries older than replay_window_seconds.
+        """
+        import time
+
+        # Prune stale entries
+        cutoff = time.monotonic() - self.replay_window_seconds
+        self._seen = {k: v for k, v in self._seen.items() if v > cutoff}
+
+        if message.is_replay(self.replay_window_seconds):
+            return False
+        if message.message_id in self._seen:
+            return False
+
+        self._seen[message.message_id] = time.monotonic()
+        return True
 
     async def publish(self, message: GossipMessage) -> None:
         import aio_pika

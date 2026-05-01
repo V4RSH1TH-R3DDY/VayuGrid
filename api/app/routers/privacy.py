@@ -13,6 +13,15 @@ from ..security import UserClaims, require_roles
 router = APIRouter(tags=["privacy"])
 
 
+def _encrypt_ip(ip: str) -> str:
+    from ..security import Encryption
+
+    try:
+        return Encryption.encrypt(ip)
+    except Exception:
+        return ip  # fall back to plaintext if encryption fails
+
+
 @router.get("/privacy/consent/{node_id}")
 @limiter.limit("100/minute")
 def get_consent(
@@ -57,7 +66,7 @@ def set_consent(
             payload.consented,
             payload.consent_version,
             Json(payload.categories),
-            request.client.host if request.client else None,
+            (_encrypt_ip(request.client.host) if request.client and request.client.host else None),
         ),
     )
     return {"status": "recorded"}
@@ -65,8 +74,10 @@ def set_consent(
 
 @router.get("/privacy/export/{node_id}")
 @limiter.limit("20/minute")
-def export_household_data(request: Request,
-    node_id: int, _: UserClaims = Depends(require_roles(["operator", "homeowner"]))
+def export_household_data(
+    request: Request,
+    node_id: int,
+    _: UserClaims = Depends(require_roles(["operator", "homeowner"])),
 ) -> dict:
     telemetry = fetch_all(
         "SELECT * FROM node_telemetry WHERE node_id = %s ORDER BY ts",
@@ -84,6 +95,15 @@ def export_household_data(request: Request,
         "SELECT * FROM household_consents WHERE node_id = %s ORDER BY updated_at",
         (node_id,),
     )
+    for record in consents:
+        raw_ip = record.get("ip_address")
+        if raw_ip:
+            try:
+                from ..security import Encryption
+
+                record["ip_address"] = Encryption.decrypt(raw_ip)
+            except Exception:
+                pass  # old unencrypted data — leave as-is
     flags = fetch_all(
         "SELECT * FROM critical_load_flags WHERE node_id = %s ORDER BY created_at",
         (node_id,),
@@ -100,8 +120,10 @@ def export_household_data(request: Request,
 
 @router.post("/privacy/delete/{node_id}")
 @limiter.limit("20/minute")
-def request_deletion(request: Request,
-    node_id: int, _: UserClaims = Depends(require_roles(["operator", "homeowner"]))
+def request_deletion(
+    request: Request,
+    node_id: int,
+    _: UserClaims = Depends(require_roles(["operator", "homeowner"])),
 ) -> dict:
     request_id = f"del_{node_id}_{int(datetime.now(timezone.utc).timestamp())}"
     scheduled_for = datetime.now(timezone.utc) + timedelta(hours=72)

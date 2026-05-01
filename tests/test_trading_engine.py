@@ -91,3 +91,18 @@ def test_engine_suspends_orders_during_island_mode() -> None:
 
     assert order.status == OrderStatus.REJECTED
     assert order.metadata["rejection_reason"] == "market is islanded"
+
+
+def test_circuit_breaker_halts_orders_at_queue_depth_limit() -> None:
+    now = datetime(2026, 5, 1, 10, 0, tzinfo=timezone.utc)
+    engine = MatchingEngine(max_queue_depth=3)
+
+    # Submit 3 BUY orders from different nodes — all should be accepted (open)
+    for i in range(3):
+        order = engine.submit_order(i + 10, OrderSide.BUY, 1.0, 8.0, now=now, order_id=f"buy-{i}")
+        assert order.status == OrderStatus.OPEN, f"Expected OPEN, got {order.status}"
+
+    # 4th order must be rejected by the circuit breaker
+    rejected = engine.submit_order(99, OrderSide.BUY, 1.0, 8.0, now=now, order_id="overflow")
+    assert rejected.status == OrderStatus.REJECTED
+    assert "circuit breaker" in rejected.metadata["rejection_reason"]
