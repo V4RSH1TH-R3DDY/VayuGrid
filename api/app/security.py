@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -13,6 +15,23 @@ from pydantic import BaseModel
 from .config import settings
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+class Encryption:
+    @staticmethod
+    def encrypt(data: str) -> str:
+        aesgcm = AESGCM(settings.encryption_key.encode())
+        nonce = os.urandom(12)
+        ct = aesgcm.encrypt(nonce, data.encode(), None)
+        return (nonce + ct).hex()
+
+    @staticmethod
+    def decrypt(hex_data: str) -> str:
+        data = bytes.fromhex(hex_data)
+        nonce = data[:12]
+        ct = data[12:]
+        aesgcm = AESGCM(settings.encryption_key.encode())
+        return aesgcm.decrypt(nonce, ct, None).decode()
 
 
 class UserClaims(BaseModel):

@@ -24,6 +24,7 @@ class Settings:
     )
     jwt_secret: str = os.getenv("JWT_SECRET", "change-me")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
+    encryption_key: str = os.getenv("ENCRYPTION_KEY", "uN_v58Z_V7P-v1A8A-v1_V7P-v1A8A-v1_V7P-v1A=")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
     cors_origins: List[str] = field(
         default_factory=lambda: [
