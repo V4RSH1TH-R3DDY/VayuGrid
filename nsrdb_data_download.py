@@ -33,7 +33,6 @@ BASE_URL = "https://developer.nrel.gov/api/nsrdb/v2/solar/himawari-download.json
 CITIES = {
     "bangalore": ["POINT(77.5946 12.9716)"],
     "chennai": ["POINT(80.2707 13.0827)"],
-    
     "kochi": ["POINT(76.2673 9.9312)"],
     "hyderabad": ["POINT(78.4867 17.3850)"],
     "delhi": ["POINT(77.1025 28.7041)"],

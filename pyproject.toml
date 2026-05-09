@@ -33,10 +33,23 @@ dev = [
   "pytest>=8.2,<9",
   "ruff>=0.5,<0.13",
 ]
+ai = [
+  "torch>=2.3,<3",
+  "gymnasium>=0.29,<1",
+  "stable-baselines3>=2.3,<3",
+  "tensorboard>=2.17,<3",
+  "scipy>=1.13,<2",
+  "networkx>=3.3,<4",
+]
 
 [tool.setuptools]
 packages = [
   "ai",
+  "ai.env",
+  "ai.baselines",
+  "ai.core",
+  "ai.gnn",
+  "ai.training",
   "simulator",
   "api",
   "api.app",

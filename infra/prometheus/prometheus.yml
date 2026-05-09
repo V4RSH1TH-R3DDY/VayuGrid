@@ -7,16 +7,23 @@ scrape_configs:
     static_configs:
       - targets: ["prometheus:9090"]
 
-  # Placeholder targets for future app instrumentation.
   - job_name: rabbitmq
     metrics_path: /metrics
     static_configs:
       - targets: ["rabbitmq:15692"]
 
+  # FastAPI app metrics (requires prometheus_client instrumentation in main.py)
+  - job_name: api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api:8000"]
+
+  # Needs prometheus-postgres-exporter sidecar container
   - job_name: postgres
     static_configs:
       - targets: []
 
+  # Needs redis_exporter sidecar container
   - job_name: redis
     static_configs:
       - targets: []
