@@ -47,6 +47,9 @@ class Settings:
     anomaly_contamination: float = float(os.getenv("ANOMALY_CONTAMINATION", "0.05"))
     anomaly_threshold: float = float(os.getenv("ANOMALY_THRESHOLD", "-0.1"))
     telemetry_replay_window_seconds: int = int(os.getenv("TELEMETRY_REPLAY_WINDOW_SECONDS", "300"))
+    gnn_checkpoint_path: str = os.getenv(
+        "GNN_CHECKPOINT_PATH", "outputs/checkpoints/vayu_gnn_best.pt"
+    )
 
     def __post_init__(self) -> None:
         self.dashboard_users = _load_users()

@@ -4,7 +4,7 @@ import time
 import zipfile
 
 import pandas as pd
-import requests
+import requests  # type: ignore[import-untyped]
 
 
 def load_env_file(env_path: str = ".env") -> None:

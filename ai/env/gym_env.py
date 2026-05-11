@@ -22,7 +22,7 @@ except ImportError:
     spaces = None  # type: ignore[assignment]
 
 
-NUM_FEATURES = 16
+OBS_DIM = 12  # matches CortexCore ObsIdx layout
 
 
 @dataclass
@@ -31,6 +31,8 @@ class EnvConfig:
     episode_minutes: int = 1440
     node_id: int = 1
     seed: int = 42
+    use_pecan: bool = False
+    city: str = "bangalore"
 
 
 class VayuGridEnv:
@@ -46,6 +48,14 @@ class VayuGridEnv:
         self.rng = np.random.default_rng(config.seed)
 
         self._sim_cfg = load_simulator_config(config.scenario_path)
+        if config.use_pecan:
+            pecan_path = (
+                f"data/processed/pecan_india/{config.city}/2019/"
+                f"pecan_wired_{config.city}_2019.csv"
+            )
+            self._sim_cfg.load_profile.use_pecan_profiles = True
+            self._sim_cfg.load_profile.pecan_profile_file = pecan_path
+            self._sim_cfg.load_profile.city = config.city
         self._sim = GridSimulator(self._sim_cfg)
         self._node_id = config.node_id
         self._asset: HomeAsset | None = None
@@ -55,8 +65,8 @@ class VayuGridEnv:
         self._pv_kw: float = 0.0
         self._ev_kw: float = 0.0
 
-        low = np.full(NUM_FEATURES, -1e3, dtype=np.float32)
-        high = np.full(NUM_FEATURES, 1e3, dtype=np.float32)
+        low = np.full(OBS_DIM, -1e3, dtype=np.float32)
+        high = np.full(OBS_DIM, 1e3, dtype=np.float32)
         obs_space = spaces.Box(low=low, high=high, dtype=np.float32) if spaces else None
         act_space = spaces.Box(low=-1.0, high=1.0, shape=(5,), dtype=np.float32) if spaces else None
         self.observation_space = obs_space
@@ -73,22 +83,18 @@ class VayuGridEnv:
         a = self._asset
         obs = np.array(
             [
-                a.battery_soc_kwh / max(a.battery_capacity_kwh, 1e-6),
-                self._pv_kw,
-                self._load_kw,
-                self._ev_kw,
-                a.battery_max_kw,
-                self._pv_kw - self._load_kw,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                float(np.sin(2 * np.pi * self._t_idx / 1440)),
-                float(np.cos(2 * np.pi * self._t_idx / 1440)),
-                0.0,
-                0.0,
-                0.0,
-                0.0,
+                a.battery_soc_kwh / max(a.battery_capacity_kwh, 1e-6),   # SOC_NORM = 0
+                self._pv_kw,                                               # SOLAR_KW = 1
+                self._load_kw,                                             # LOAD_KW = 2
+                self._ev_kw,                                               # EV_KW = 3
+                a.battery_max_kw,                                          # BATT_MAX_KW = 4
+                self._pv_kw - self._load_kw,                               # NET_KW = 5
+                float(np.sin(2 * np.pi * self._t_idx / 1440)),              # TIME_SIN = 6
+                float(np.cos(2 * np.pi * self._t_idx / 1440)),              # TIME_COS = 7
+                0.0,                                                       # FCST_SOLAR_KW = 8
+                0.0,                                                       # FCST_LOAD_KW = 9
+                0.0,                                                       # FCST_PRICE = 10
+                a.battery_soc_kwh,                                         # SOC_RAW_KWH = 11
             ],
             dtype=np.float32,
         )
@@ -103,6 +109,14 @@ class VayuGridEnv:
             self.rng = np.random.default_rng(seed)
 
         self._sim_cfg = load_simulator_config(self.config.scenario_path)
+        if self.config.use_pecan:
+            pecan_path = (
+                f"data/processed/pecan_india/{self.config.city}/2019/"
+                f"pecan_wired_{self.config.city}_2019.csv"
+            )
+            self._sim_cfg.load_profile.use_pecan_profiles = True
+            self._sim_cfg.load_profile.pecan_profile_file = pecan_path
+            self._sim_cfg.load_profile.city = self.config.city
         self._sim = GridSimulator(self._sim_cfg)
         self._asset = self._locate_asset()
         self._t_idx = 0

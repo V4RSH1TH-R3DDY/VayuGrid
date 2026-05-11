@@ -38,6 +38,10 @@ venv/
 node_modules/
 frontend/dist/
 
+# Training outputs
+outputs/
+*.onnx
+
 # Notebook/editor artifacts
 .ipynb_checkpoints/
 .DS_Store

@@ -1,0 +1,23 @@
+# CortexCore + VayuGNN — Python Dependencies
+# ============================================
+# Python >= 3.10 recommended
+
+# Core ML
+torch>=2.2.0
+numpy>=1.24.0
+
+# ONNX export + runtime (CortexCore deployment)
+onnx>=1.16.0
+onnxruntime>=1.18.0          # CPU build; use onnxruntime-gpu for CUDA server
+
+# Training utilities
+tensorboard>=2.16.0
+tqdm>=4.66.0
+
+# Optional: faster data loading during GNN training
+# torch-geometric>=2.5.0    # uncomment if you swap to PyG message passing
+# torch-scatter>=2.1.2
+# torch-sparse>=0.6.18
+
+# Development / testing
+pytest>=8.0.0

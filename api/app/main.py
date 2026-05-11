@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
@@ -9,6 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+
+from ai.gnn.inference import VayuGNNInferenceServer
 
 from .anomaly import detector
 from .breach import notifier
@@ -54,6 +57,10 @@ def security_status(_: UserClaims = Depends(require_roles(["operator"]))) -> dic
     }
 
 
+# Global GNN inference server (initialized at startup)
+_gnn_server = VayuGNNInferenceServer()
+
+
 def _live_snapshot() -> dict:
     telemetry = fetch_all(
         """
@@ -84,14 +91,17 @@ def _live_snapshot() -> dict:
     gnn_predictions = []
     for row in predictions:
         loading = row.get("transformer_loading_pu") or 0
-        overload_probability = 1 / (1 + pow(2.71828, -12 * (loading - 1.0))) if loading else 0
+        overload_prob = _gnn_server.predict_overload(
+            transformer_loading_pu=loading,
+            max_branch_loading_pu=row.get("max_branch_loading_pu") or 0.0,
+        )
         gnn_predictions.append(
             {
                 "ts": row.get("ts"),
                 "transformer_id": row.get("transformer_id"),
                 "loading_pu": loading,
                 "max_branch_loading_pu": row.get("max_branch_loading_pu"),
-                "overload_probability": round(overload_probability, 4),
+                "overload_probability": round(overload_prob, 4),
             }
         )
     return {
@@ -146,6 +156,20 @@ async def startup() -> None:
         import logging
 
         logging.getLogger(__name__).warning("Anomaly detector training failed at startup: %s", exc)
+
+    # Load GNN model checkpoint (non-fatal — falls back to sigmoid)
+    try:
+        ckpt_path = Path(settings.gnn_checkpoint_path)
+        if ckpt_path.exists():
+            await asyncio.to_thread(_gnn_server.load, str(ckpt_path))
+        else:
+            import logging
+            logging.getLogger(__name__).info(
+                "GNN checkpoint not found at %s (using fallback sigmoid)", ckpt_path
+            )
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("GNN model loading failed: %s", exc)
 
     # Start the breach notification background loop
     asyncio.get_event_loop().create_task(_breach_notification_loop())

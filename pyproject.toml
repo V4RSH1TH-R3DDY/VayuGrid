@@ -40,6 +40,9 @@ ai = [
   "tensorboard>=2.17,<3",
   "scipy>=1.13,<2",
   "networkx>=3.3,<4",
+  "onnx>=1.16,<2",
+  "onnxruntime>=1.18,<2",
+  "onnxscript>=0.1,<1",
 ]
 
 [tool.setuptools]
@@ -50,6 +53,7 @@ packages = [
   "ai.core",
   "ai.gnn",
   "ai.training",
+  "scripts",
   "simulator",
   "api",
   "api.app",
