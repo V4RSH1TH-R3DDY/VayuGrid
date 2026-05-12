@@ -83,6 +83,26 @@ class GossipMessage:
         age = (now - created).total_seconds()
         return age > window_seconds or age < -5
 
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GossipMessage":
+        from datetime import datetime
+
+        kind = MessageKind(data["kind"])
+        created_at = (
+            datetime.fromisoformat(data["created_at"])
+            if isinstance(data["created_at"], str)
+            else data["created_at"]
+        )
+        return cls(
+            kind=kind,
+            source_node_id=data["source_node_id"],
+            payload=data["payload"],
+            created_at=created_at,
+            message_id=data.get("message_id", ""),
+            ttl_hops=data.get("ttl_hops", 3),
+            signature=data.get("signature"),
+        )
+
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
         payload["kind"] = self.kind.value

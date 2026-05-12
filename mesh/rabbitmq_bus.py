@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
 
 from .messages import GossipMessage, MessageKind
 
-MessageHandler = Callable[[dict[str, Any]], Awaitable[None]]
+MessageHandler = Callable[[GossipMessage], Awaitable[None]]
+
+logger = logging.getLogger(__name__)
 
 
 class RabbitMQMeshBus:
@@ -26,6 +28,16 @@ class RabbitMQMeshBus:
         self.exchange_name = exchange_name
         self.replay_window_seconds = replay_window_seconds
         self._seen: dict[str, float] = {}
+        self._handlers: dict[MessageKind, list[MessageHandler]] = {}
+
+    def subscribe(self, kind: MessageKind, handler: MessageHandler) -> None:
+        """Register a handler for a specific message kind."""
+        self._handlers.setdefault(kind, []).append(handler)
+
+    def subscribe_all(self, handler: MessageHandler) -> None:
+        """Register a catch-all handler for every message kind."""
+        for kind in MessageKind:
+            self.subscribe(kind, handler)
 
     @staticmethod
     def routing_key(kind: MessageKind) -> str:
@@ -71,3 +83,53 @@ class RabbitMQMeshBus:
                 ),
                 routing_key=self.routing_key(message.kind),
             )
+
+    async def listen(self) -> None:
+        """Start consuming messages from the exchange and dispatching to registered handlers.
+
+        Runs forever — connect to RabbitMQ, bind an exclusive queue to ``mesh.#``,
+        validate each message, and forward it to matching handlers.
+        """
+        import aio_pika
+
+        connection = await aio_pika.connect_robust(self.amqp_url)
+        channel = await connection.channel()
+        exchange = await channel.declare_exchange(
+            self.exchange_name, aio_pika.ExchangeType.TOPIC, durable=True
+        )
+        queue = await channel.declare_queue("", exclusive=True)
+
+        for kind in MessageKind:
+            await queue.bind(exchange, routing_key=self.routing_key(kind))
+
+        logger.info(
+            "Mesh consumer listening on %s (%d handlers registered)",
+            self.exchange_name,
+            sum(len(h) for h in self._handlers.values()),
+        )
+
+        async with queue.iterator() as queue_iter:
+            async for aio_message in queue_iter:
+                async with aio_message.process():
+                    try:
+                        data = json.loads(aio_message.body)
+                        message = GossipMessage.from_dict(data)
+                    except Exception:
+                        logger.warning("Failed to decode mesh message", exc_info=True)
+                        continue
+
+                    if not self.validate_and_record(message):
+                        logger.debug("Rejected duplicate/replay message %s", message.message_id)
+                        continue
+
+                    handlers = self._handlers.get(message.kind, [])
+                    for handler in handlers:
+                        try:
+                            await handler(message)
+                        except Exception:
+                            logger.error(
+                                "Handler error for %s message %s",
+                                message.kind.value,
+                                message.message_id,
+                                exc_info=True,
+                            )

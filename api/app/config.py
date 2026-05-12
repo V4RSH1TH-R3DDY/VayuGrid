@@ -50,6 +50,9 @@ class Settings:
     gnn_checkpoint_path: str = os.getenv(
         "GNN_CHECKPOINT_PATH", "outputs/checkpoints/vayu_gnn_best.pt"
     )
+    amqp_url: str = os.getenv(
+        "AMQP_URL", "amqp://vayugrid:change-me@localhost:5672/"
+    )
 
     def __post_init__(self) -> None:
         self.dashboard_users = _load_users()
