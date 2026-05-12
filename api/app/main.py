@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from ai.gnn.inference import VayuGNNInferenceServer
+from mesh import GossipMessage, RabbitMQMeshBus
 
 from .anomaly import detector
 from .breach import notifier
@@ -20,6 +22,8 @@ from .db import fetch_all, pool
 from .rate_limit import limiter
 from .routers import admin, auth, community, dashboards, nodes, privacy, signals, trading
 from .security import UserClaims, decode_access_token, require_roles
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="VayuGrid API", version="0.1.0")
 
@@ -59,6 +63,9 @@ def security_status(_: UserClaims = Depends(require_roles(["operator"]))) -> dic
 
 # Global GNN inference server (initialized at startup)
 _gnn_server = VayuGNNInferenceServer()
+
+# Global mesh bus (initialized at startup)
+_mesh_bus: RabbitMQMeshBus | None = None
 
 
 def _live_snapshot() -> dict:
@@ -140,9 +147,7 @@ async def _breach_notification_loop() -> None:
         try:
             await asyncio.to_thread(notifier.notify_pending)
         except Exception as exc:
-            import logging
-
-            logging.getLogger(__name__).warning("Breach notification loop error: %s", exc)
+            logger.warning("Breach notification loop error: %s", exc)
 
 
 @app.on_event("startup")
@@ -153,9 +158,8 @@ async def startup() -> None:
     try:
         detector.fit_from_db()
     except Exception as exc:
-        import logging
 
-        logging.getLogger(__name__).warning("Anomaly detector training failed at startup: %s", exc)
+        logger.warning("Anomaly detector training failed at startup: %s", exc)
 
     # Load GNN model checkpoint (non-fatal — falls back to sigmoid)
     try:
@@ -163,16 +167,31 @@ async def startup() -> None:
         if ckpt_path.exists():
             await asyncio.to_thread(_gnn_server.load, str(ckpt_path))
         else:
-            import logging
-            logging.getLogger(__name__).info(
+            logger.info(
                 "GNN checkpoint not found at %s (using fallback sigmoid)", ckpt_path
             )
     except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("GNN model loading failed: %s", exc)
+        logger.warning("GNN model loading failed: %s", exc)
 
     # Start the breach notification background loop
     asyncio.get_event_loop().create_task(_breach_notification_loop())
+
+    # Start mesh consumer
+    global _mesh_bus
+    try:
+        _mesh_bus = RabbitMQMeshBus(amqp_url=settings.amqp_url)
+
+        async def _log_mesh_message(message: GossipMessage) -> None:
+            logger.info(
+                "Mesh message: kind=%s source=%s id=%s",
+                message.kind.value, message.source_node_id, message.message_id,
+            )
+
+        _mesh_bus.subscribe_all(_log_mesh_message)
+        asyncio.get_event_loop().create_task(_mesh_bus.listen())
+        logger.info("Mesh consumer started (AMQP: %s)", settings.amqp_url)
+    except Exception as exc:
+        logger.warning("Mesh consumer not available: %s", exc)
 
 
 @app.on_event("shutdown")

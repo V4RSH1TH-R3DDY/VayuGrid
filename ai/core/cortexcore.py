@@ -457,7 +457,8 @@ class CortexCore:
         lp:    float,
         done:  bool,
     ):
-        obs_t = torch.FloatTensor(obs).to(self.device)
+        normed = self.normalizer.normalize(obs)
+        obs_t = torch.FloatTensor(normed).to(self.device)
         act_t = torch.FloatTensor(act).to(self.device)
         self.buffer.push(obs_t, act_t, rew, val, lp, done)
         self.total_steps += 1
