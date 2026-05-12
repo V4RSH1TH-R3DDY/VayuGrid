@@ -1,0 +1,86 @@
+{
+  "start_time": "2019-07-01T00:00:00",
+  "end_time": "2019-07-04T00:00:00",
+  "time_step_minutes": 1,
+  "random_seed": 21,
+  "neighborhood": {
+    "num_homes": 300,
+    "max_supported_nodes": 500,
+    "line_resistance_ohm_per_km": 0.64,
+    "min_edge_length_m": 40.0,
+    "max_edge_length_m": 220.0,
+    "base_voltage_v": 230.0,
+    "line_ampacity_a": 125.0
+  },
+  "adoption": {
+    "solar_ratio": 0.6,
+    "battery_ratio": 0.2,
+    "ev_ratio": 0.4
+  },
+  "load_profile": {
+    "target_daily_kwh": 7.2,
+    "target_daily_kwh_min": 5.5,
+    "target_daily_kwh_max": 8.0,
+    "gaussian_noise_sigma": 0.10,
+    "afternoon_ac_gain": 0.42,
+    "evening_peak_gain": 0.65,
+    "festival_spike_gain": 0.60,
+    "cricket_spike_gain": 0.22,
+    "afternoon_ac_threshold_c": 35.0,
+    "use_pecan_profiles": false,
+    "pecan_profile_file": null,
+    "replace_solar_with_nsrdb": true,
+    "nsrdb_data_root": "data/nsrdb_himawari",
+    "city": "delhi",
+    "year": 2019,
+    "festival_dates": ["2019-07-03"],
+    "cricket_match_dates": ["2019-07-01", "2019-07-02"]
+  },
+  "transformer": {
+    "rated_power_kw": 900.0,
+    "ambient_temp_c": 38.0,
+    "delta_theta_to_r": 55.0,
+    "delta_theta_hs_r": 30.0,
+    "tau_to_min": 180.0,
+    "tau_w_min": 10.0,
+    "r_loss_ratio": 5.0,
+    "n_exp": 0.8,
+    "m_exp": 0.8,
+    "initial_top_oil_rise_c": 20.0,
+    "initial_hotspot_rise_c": 10.0
+  },
+  "faults": [
+    {
+      "event_type": "solar_dropout",
+      "name": "monsoon_cloud_band",
+      "start": "2019-07-01T12:40:00",
+      "end": "2019-07-01T14:10:00",
+      "target": "all",
+      "params": { "drop_fraction": 0.85 }
+    },
+    {
+      "event_type": "overload",
+      "name": "evening_overload_cluster",
+      "start": "2019-07-01T19:00:00",
+      "end": "2019-07-01T20:20:00",
+      "target": "random_cluster",
+      "params": { "load_multiplier": 1.55, "target_ratio": 0.50 }
+    },
+    {
+      "event_type": "grid_outage",
+      "name": "transformer_trip",
+      "start": "2019-07-02T18:10:00",
+      "end": "2019-07-02T19:05:00",
+      "target": "all",
+      "params": {}
+    },
+    {
+      "event_type": "planned_maintenance",
+      "name": "scheduled_switchyard_work",
+      "start": "2019-07-03T10:00:00",
+      "end": "2019-07-03T11:00:00",
+      "target": "all",
+      "params": {}
+    }
+  ]
+}

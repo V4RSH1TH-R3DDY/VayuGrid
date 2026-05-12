@@ -3,6 +3,7 @@ data/
 *.csv
 *.tsv
 *.json
+!scenarios/*.json
 *.parquet
 *.feather
 *.h5
