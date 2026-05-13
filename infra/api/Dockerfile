@@ -8,6 +8,7 @@ COPY ai ./ai
 COPY api ./api
 COPY mesh ./mesh
 COPY services ./services
+COPY scripts ./scripts
 COPY simulator ./simulator
 COPY trading ./trading
 RUN pip install --no-cache-dir --upgrade pip && \

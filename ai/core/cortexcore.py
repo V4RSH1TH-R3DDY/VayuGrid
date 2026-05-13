@@ -401,7 +401,7 @@ class CortexCore:
         }
 
         early_stopped = False
-        for epoch in range(self.cfg.ppo_epochs):
+        for _epoch in range(self.cfg.ppo_epochs):
             indices = torch.randperm(T, device=self.device)
             epoch_kl = 0.0
             n_batches = 0
@@ -695,12 +695,12 @@ class RuntimeWithFallback:
 
     def _run_sanity_check(self) -> None:
         obs_batch = np.random.randn(self._n_samples, OBS_DIM).astype(np.float32)
-        actions = []
+        act_list: list[np.ndarray] = []
         for i in range(self._n_samples):
             env_act, _, _, _ = self._agent.select_action(obs_batch[i], deterministic=True)
-            actions.append(env_act)
-        actions = np.array(actions)
-        per_dim_std = actions.std(axis=0)
+            act_list.append(env_act)
+        actions_arr = np.array(act_list)
+        per_dim_std = actions_arr.std(axis=0)
         mean_std = float(per_dim_std.mean())
 
         self._model_functional = mean_std >= self._threshold
@@ -723,7 +723,6 @@ class RuntimeWithFallback:
         return env_act
 
     def _fallback_action(self, obs: np.ndarray) -> np.ndarray:
-        net_kw = obs[ObsIdx.NET_KW]
         soc_norm = obs[ObsIdx.SOC_NORM]
         t_sin = obs[ObsIdx.TIME_SIN]
         t_cos = obs[ObsIdx.TIME_COS]
@@ -819,13 +818,13 @@ if __name__ == "__main__":
 
     print("\nAction space check:")
     obs  = np.random.rand(OBS_DIM).astype(np.float32)
-    env_act, _, _, _ = agent.select_action(obs)
-    act = env_act
-    print(f"  battery  ([-1,1])  : {act[ActIdx.BATT_RATE]:.3f}")
-    print(f"  EV rate  ([0,1])   : {act[ActIdx.EV_RATE]:.3f}")
-    print(f"  bid      ([0,1])   : {act[ActIdx.BID_PRICE]:.3f}")
-    print(f"  ask      ([0,1])   : {act[ActIdx.ASK_PRICE]:.3f}")
-    print(f"  grid I/O ([-1,1])  : {act[ActIdx.GRID_IO]:.3f}")
+    sa_result = agent.select_action(obs)
+    env_act_np = sa_result[0]
+    print(f"  battery  ([-1,1])  : {env_act_np[ActIdx.BATT_RATE]:.3f}")
+    print(f"  EV rate  ([0,1])   : {env_act_np[ActIdx.EV_RATE]:.3f}")
+    print(f"  bid      ([0,1])   : {env_act_np[ActIdx.BID_PRICE]:.3f}")
+    print(f"  ask      ([0,1])   : {env_act_np[ActIdx.ASK_PRICE]:.3f}")
+    print(f"  grid I/O ([-1,1])  : {env_act_np[ActIdx.GRID_IO]:.3f}")
 
     print("\nBaseline actions (B1, B2):")
     print(" B1:", BaselineB1().act(obs))

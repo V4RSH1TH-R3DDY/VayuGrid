@@ -32,7 +32,7 @@ from ai.demo import make_demo_env_config, make_demo_ppo_config, make_demo_reward
 from ai.env.gym_env import EnvConfig, VayuGridEnv
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train CortexCore PPO agent")
     parser.add_argument("--scenario", default="scenarios/phase1_default.json")
     parser.add_argument("--total-timesteps", type=int, default=500_000)
@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--city", default="bangalore",
                         choices=["bangalore", "chennai", "delhi", "hyderabad", "kochi"],
                         help="City for Pecan/NSRDB data")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def _make_env(args: argparse.Namespace) -> VayuGridEnv:
