@@ -23,9 +23,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
-import sys
 import time
-from pathlib import Path
 
 import numpy as np
 import torch
@@ -167,7 +165,6 @@ def run_compare() -> None:
     term = trunc = False
     steps = 0
     while not (term or trunc) and steps < 1440:
-        net_kw = obs[5]
         soc_norm = obs[0]
         t_sin, t_cos = obs[6], obs[7]
         hour = (np.degrees(np.arctan2(t_sin, t_cos)) % 360) / 15.0
@@ -217,7 +214,7 @@ def run_full() -> None:
 
 # ── CLI ───────────────────────────────────────────────────────────
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="VayuGrid Demo")
     parser.add_argument(
         "mode",
@@ -230,6 +227,11 @@ def main() -> None:
                         choices=["bangalore", "chennai", "delhi", "hyderabad", "kochi"])
     parser.add_argument("--steps", type=int, default=10,
                         help="Steps per scenario (basic/pecan/fault only)")
+    return parser
+
+
+def main() -> None:
+    parser = _build_parser()
     args = parser.parse_args()
 
     modes = ["basic", "pecan", "fault", "compare", "full"] if args.mode == "all" else [args.mode]

@@ -67,6 +67,7 @@ packages = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
@@ -77,6 +78,7 @@ testpaths = ["tests"]
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["ai", "simulator", "api", "mesh", "services", "trading"]
+packages = ["ai", "simulator", "api", "mesh", "services", "trading", "scripts", "tests"]
 ignore_missing_imports = true
 warn_unused_configs = true
+exclude = [".*\\.ipynb$"]

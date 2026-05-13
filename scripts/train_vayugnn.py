@@ -33,7 +33,7 @@ from ai.gnn.vayu_gnn import (
 from simulator.config import load_simulator_config
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train VayuGNN model")
     parser.add_argument("--scenario", default="scenarios/phase1_default.json")
     parser.add_argument("--epochs", type=int, default=50)
@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--city", default="bangalore",
                         choices=["bangalore", "chennai", "delhi", "hyderabad", "kochi"],
                         help="City for Pecan/NSRDB data")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def collate_fn(batch: list[GNNSample]) -> tuple[list[list[Any]], dict[str, torch.Tensor]]:

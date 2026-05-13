@@ -69,7 +69,7 @@ def evaluate(args: argparse.Namespace) -> pd.DataFrame:
         done = False
 
         while not done:
-            action, _, _ = agent.select_action(obs, deterministic=True)
+            action, _, _, _ = agent.select_action(obs, deterministic=True)
             obs, rew, terminated, truncated, info = env.step(action)
             total_reward += rew
             done = terminated or truncated
