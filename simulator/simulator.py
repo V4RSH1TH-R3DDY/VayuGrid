@@ -4,6 +4,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -24,9 +25,10 @@ from simulator.thermal import IEEETransformerThermalModel
 
 
 class GridSimulator:
-    def __init__(self, config: SimulatorConfig) -> None:
+    def __init__(self, config: SimulatorConfig, controller: Any | None = None) -> None:
         self.config = config
         self.config.validate()
+        self.controller = controller
         self.rng = np.random.default_rng(config.random_seed)
 
         self.start_time = datetime.fromisoformat(config.start_time)
@@ -282,7 +284,13 @@ class GridSimulator:
             battery_soc = np.zeros(len(self.home_assets), dtype=float)
             overload_fault_active = FAULT_OVERLOAD in fault_state.active_faults
             for idx, asset in enumerate(self.home_assets):
-                if overload_fault_active:
+                if self.controller is not None and not overload_fault_active:
+                    batt_kw, soc, mod_ev = self.controller.control_home(
+                        t_idx, idx, asset,
+                        float(load_kw[idx]), float(pv_kw[idx]), float(ev_kw[idx]),
+                    )
+                    ev_kw[idx] = mod_ev
+                elif overload_fault_active:
                     batt_kw, soc = 0.0, asset.battery_soc_kwh
                 else:
                     batt_kw, soc, _ = self._dispatch_battery(

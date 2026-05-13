@@ -28,6 +28,7 @@ from ai.core.cortexcore import (
     RewardConfig,
 )
 from ai.core.normalizer import ObservationNormalizer
+from ai.demo import make_demo_env_config, make_demo_ppo_config, make_demo_reward_config
 from ai.env.gym_env import EnvConfig, VayuGridEnv
 
 
@@ -39,6 +40,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--log-dir", default="outputs/logs")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--demo", action="store_true",
+                        help="Demo mode: tiny scenario, small model, fast iteration")
     parser.add_argument("--use-pecan", action="store_true",
                         help="Use Pecan Street real load profiles (overrides scenario config)")
     parser.add_argument("--city", default="bangalore",
@@ -48,6 +51,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def _make_env(args: argparse.Namespace) -> VayuGridEnv:
+    if args.demo:
+        return VayuGridEnv(make_demo_env_config())
     return VayuGridEnv(EnvConfig(
         scenario_path=args.scenario,
         seed=args.seed,
@@ -69,10 +74,24 @@ def train(args: argparse.Namespace) -> CortexCore:
     log_dir = Path(args.log_dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
+    if args.use_pecan and not args.demo:
+        args.scenario = "scenarios/phase1_debug.json"
+        if args.total_timesteps >= 500_000:
+            args.total_timesteps = 10_000
+        print(f"[train_cortexcore] Real-data mode: scenario={args.scenario},"
+              f" timesteps={args.total_timesteps}")
+
     normalizer = ObservationNormalizer((12,))
+    if args.demo:
+        ppo_cfg = make_demo_ppo_config()
+    elif args.use_pecan:
+        ppo_cfg = PPOConfig(reward_scale=0.01, lr_actor=3e-5, lr_critic=3e-4)
+    else:
+        ppo_cfg = PPOConfig()
+    rew_cfg = make_demo_reward_config() if args.demo else RewardConfig()
     agent = CortexCore(
-        cfg=PPOConfig(),
-        reward=RewardConfig(),
+        cfg=ppo_cfg,
+        reward=rew_cfg,
         normalizer=normalizer,
         device=device,
     )
@@ -90,11 +109,11 @@ def train(args: argparse.Namespace) -> CortexCore:
 
     t0 = time.perf_counter()
     for step in range(1, args.total_timesteps + 1):
-        # Select action
-        action_np, log_prob, value = agent.select_action(obs)
+        # Select action (returns env_action + raw_action for correct PPO ratio)
+        env_action_np, raw_action_np, log_prob, value = agent.select_action(obs)
 
-        # Step environment
-        next_obs, env_reward, terminated, truncated, info = env.step(action_np)
+        # Step environment with clipped action
+        next_obs, env_reward, terminated, truncated, info = env.step(env_action_np)
         done = terminated or truncated
 
         # Use CortexCore's reward computer for proper reward shaping
@@ -107,8 +126,8 @@ def train(args: argparse.Namespace) -> CortexCore:
             gnn_signal_followed=False,
         )
 
-        # Store transition
-        agent.push_transition(obs, action_np, rew, value, log_prob, done)
+        # Store transition with raw action (pre-clipping) for correct ratio
+        agent.push_transition(obs, raw_action_np, rew, value, log_prob, done)
 
         ep_rew += rew
         ep_len += 1
@@ -142,13 +161,14 @@ def train(args: argparse.Namespace) -> CortexCore:
             elapsed = time.perf_counter() - t0
             sps = step / elapsed
             mean_rew = float(np.mean(episode_rewards[-20:])) if episode_rewards else 0.0
+            es = " [ES]" if metrics.get("early_stopped") else ""
             print(
                 f"  Update at step {step:>7d} | "
                 f"policy_loss={metrics['policy_loss']:.4f} "
                 f"value_loss={metrics['value_loss']:.4f} "
                 f"entropy={metrics['entropy']:.4f} "
                 f"approx_kl={metrics['approx_kl']:.4f} "
-                f"mean_reward={mean_rew:+7.2f} | {sps:5.0f} steps/s"
+                f"mean_reward={mean_rew:+7.2f} | {sps:5.0f} steps/s{es}"
             )
 
             # Checkpoint if best so far
@@ -158,7 +178,7 @@ def train(args: argparse.Namespace) -> CortexCore:
                 agent.save(ckpt_path)
                 timesteps_at_last_checkpoint = step
 
-        if step % 50_000 == 0:
+        if step % 5_000 == 0:
             ckpt_path = str(checkpoint_dir / f"cortexcore_step_{step}.pt")
             agent.save(ckpt_path)
 
