@@ -78,10 +78,12 @@ class PPOConfig:
     entropy_coef:     float = 0.01
     value_loss_coef:  float = 0.5
     max_grad_norm:    float = 0.5
-    ppo_epochs:       int   = 10
+    ppo_epochs:       int   = 4
     minibatch_size:   int   = 64
     rollout_steps:    int   = 2048
     update_interval:  int   = rollout_steps
+    target_kl:        float = 0.02
+    reward_scale:     float = 1.0
 
 
 # ──────────────────────────────────────────────
@@ -362,18 +364,22 @@ class CortexCore:
     @torch.no_grad()
     def select_action(
         self, obs: np.ndarray, deterministic: bool = False
-    ) -> Tuple[np.ndarray, float, float]:
+    ) -> Tuple[np.ndarray, np.ndarray, float, float]:
         """
-        Returns (clipped_action, log_prob, value_estimate).
+        Returns (env_action, raw_action, log_prob, value_estimate).
+        env_action is clipped to physical bounds for the environment.
+        raw_action (pre-clipping) is stored in the buffer for correct
+        log-probability ratio computation in PPO updates.
         obs shape: (obs_dim,).  Normalized internally using running stats.
         """
         normed = self.normalizer.normalize(obs)
         obs_t  = torch.FloatTensor(normed).unsqueeze(0).to(self.device)
         raw_action, log_prob = self.actor.act(obs_t, deterministic)
-        action    = clip_actions(raw_action).squeeze(0)
+        env_action    = clip_actions(raw_action).squeeze(0)
         value     = self.critic(obs_t).squeeze(0)
         return (
-            action.cpu().numpy(),
+            env_action.cpu().numpy(),
+            raw_action.squeeze(0).cpu().numpy(),
             log_prob.item(),
             value.item(),
         )
@@ -394,8 +400,11 @@ class CortexCore:
             "policy_loss": [], "value_loss": [], "entropy": [], "approx_kl": []
         }
 
-        for _ in range(self.cfg.ppo_epochs):
+        early_stopped = False
+        for epoch in range(self.cfg.ppo_epochs):
             indices = torch.randperm(T, device=self.device)
+            epoch_kl = 0.0
+            n_batches = 0
             for start in range(0, T, self.cfg.minibatch_size):
                 mb_idx = indices[start : start + self.cfg.minibatch_size]
 
@@ -441,12 +450,23 @@ class CortexCore:
                 self.opt_critic.step()
 
                 approx_kl = ((ratio - 1) - (ratio.log())).mean().item()
+                epoch_kl += approx_kl
+                n_batches += 1
                 metrics["policy_loss"].append(policy_loss.item())
                 metrics["value_loss"].append(value_loss.item())
                 metrics["entropy"].append(entropy.item())
                 metrics["approx_kl"].append(approx_kl)
 
-        return {k: float(np.mean(v)) for k, v in metrics.items()}
+                if approx_kl > self.cfg.target_kl * 3:
+                    break
+
+            if n_batches > 0 and (epoch_kl / n_batches) > self.cfg.target_kl:
+                early_stopped = True
+                break
+
+        result = {k: float(np.mean(v)) for k, v in metrics.items()}
+        result["early_stopped"] = early_stopped
+        return result
 
     def push_transition(
         self,
@@ -460,7 +480,7 @@ class CortexCore:
         normed = self.normalizer.normalize(obs)
         obs_t = torch.FloatTensor(normed).to(self.device)
         act_t = torch.FloatTensor(act).to(self.device)
-        self.buffer.push(obs_t, act_t, rew, val, lp, done)
+        self.buffer.push(obs_t, act_t, rew * self.cfg.reward_scale, val, lp, done)
         self.total_steps += 1
 
     # ── Checkpointing ──────────────────────────
@@ -477,7 +497,7 @@ class CortexCore:
         print(f"[CortexCore] Saved checkpoint → {path}")
 
     def load(self, path: str):
-        ckpt = torch.load(path, map_location=self.device)
+        ckpt = torch.load(path, map_location=self.device, weights_only=False)
         self.actor.load_state_dict(ckpt["actor"])
         self.critic.load_state_dict(ckpt["critic"])
         self.opt_actor.load_state_dict(ckpt["opt_actor"])
@@ -624,6 +644,111 @@ def _sigmoid(x: float) -> float:
     return 1.0 / (1.0 + np.exp(-x))
 
 
+class RuntimeWithFallback:
+    """Inference wrapper with automatic fallback to rule-based control.
+
+    Checks whether the loaded model produces degenerate output (same action
+    regardless of input).  If so, falls back to a B1-style rule-based policy
+    so the system never deploys a broken model in production.
+
+    Usage::
+
+        agent = RuntimeWithFallback(checkpoint_path="outputs/checkpoints/cortexcore_best.pt")
+        action = agent.step(obs)       # transparent — may use PPO or fallback
+
+    The fallback threshold can be tuned via ``action_std_threshold``.
+    """
+
+    FALLBACK_BATT_RATE: float = 0.0
+    FALLBACK_EV_RATE: float = 0.5
+    FALLBACK_BID_PRICE: float = 0.5
+    FALLBACK_ASK_PRICE: float = 0.5
+    FALLBACK_GRID_IO: float = 0.0
+
+    def __init__(
+        self,
+        checkpoint_path: str | None = None,
+        agent: CortexCore | None = None,
+        device: torch.device | None = None,
+        action_std_threshold: float = 0.01,
+        n_check_samples: int = 20,
+        normalizer: ObservationNormalizer | None = None,
+    ):
+        self._threshold = action_std_threshold
+        self._n_samples = n_check_samples
+        self._fallback_active = False
+        self._check_done = False
+        self._model_functional = False
+
+        if agent is not None:
+            self._agent = agent
+            self._normalizer = agent.normalizer
+        elif checkpoint_path is not None:
+            dev = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self._normalizer = normalizer or ObservationNormalizer((OBS_DIM,))
+            self._agent = CortexCore(normalizer=self._normalizer, device=dev)
+            self._agent.load(checkpoint_path)
+        else:
+            raise ValueError("Provide either checkpoint_path or agent")
+
+        self._run_sanity_check()
+
+    def _run_sanity_check(self) -> None:
+        obs_batch = np.random.randn(self._n_samples, OBS_DIM).astype(np.float32)
+        actions = []
+        for i in range(self._n_samples):
+            env_act, _, _, _ = self._agent.select_action(obs_batch[i], deterministic=True)
+            actions.append(env_act)
+        actions = np.array(actions)
+        per_dim_std = actions.std(axis=0)
+        mean_std = float(per_dim_std.mean())
+
+        self._model_functional = mean_std >= self._threshold
+        self._fallback_active = not self._model_functional
+        self._check_done = True
+
+        status = "functional" if self._model_functional else "degenerate"
+        print(
+            f"[RuntimeWithFallback] Model {status}: "
+            f"mean_action_std={mean_std:.6f} "
+            f"(threshold={self._threshold})"
+        )
+        if self._fallback_active:
+            print("  → Falling back to rule-based control")
+
+    def step(self, obs: np.ndarray) -> np.ndarray:
+        if self._fallback_active:
+            return self._fallback_action(obs)
+        env_act, _, _, _ = self._agent.select_action(obs, deterministic=True)
+        return env_act
+
+    def _fallback_action(self, obs: np.ndarray) -> np.ndarray:
+        net_kw = obs[ObsIdx.NET_KW]
+        soc_norm = obs[ObsIdx.SOC_NORM]
+        t_sin = obs[ObsIdx.TIME_SIN]
+        t_cos = obs[ObsIdx.TIME_COS]
+        hour_rad = np.arctan2(t_sin, t_cos)
+        hour = (np.degrees(hour_rad) % 360) / 15.0
+
+        batt = self.FALLBACK_BATT_RATE
+        if soc_norm > 0.2:
+            if 17 <= hour < 21:
+                batt = -0.6
+            elif hour >= 22 or hour < 6:
+                batt = 0.4
+
+        ev = self.FALLBACK_EV_RATE
+        bid = self.FALLBACK_BID_PRICE
+        ask = self.FALLBACK_ASK_PRICE
+        grid = self.FALLBACK_GRID_IO
+
+        return np.array([batt, ev, bid, ask, grid], dtype=np.float32)
+
+    @property
+    def is_using_fallback(self) -> bool:
+        return self._fallback_active
+
+
 # ──────────────────────────────────────────────
 # 9. BASELINES (for gate-condition evaluation)
 # ──────────────────────────────────────────────
@@ -677,7 +802,7 @@ if __name__ == "__main__":
     # Simulate a few transitions
     for step in range(10):
         obs  = np.random.rand(OBS_DIM).astype(np.float32)
-        act, lp, val = agent.select_action(obs)
+        env_act, raw_act, lp, val = agent.select_action(obs)
 
         rew, breakdown = agent.reward_computer.compute(
             p2p_revenue_dollar=float(np.random.rand()),
@@ -686,7 +811,7 @@ if __name__ == "__main__":
             ev_deadline_missed=False,
             gnn_signal_followed=True,
         )
-        agent.push_transition(obs, act, rew, val, lp, done=(step == 9))
+        agent.push_transition(obs, raw_act, rew, val, lp, done=(step == 9))
 
     # Trigger a mini-update (normally runs after rollout_steps)
     agent.buffer.ptr = agent.cfg.rollout_steps   # fake full buffer
@@ -694,7 +819,8 @@ if __name__ == "__main__":
 
     print("\nAction space check:")
     obs  = np.random.rand(OBS_DIM).astype(np.float32)
-    act, _, _ = agent.select_action(obs)
+    env_act, _, _, _ = agent.select_action(obs)
+    act = env_act
     print(f"  battery  ([-1,1])  : {act[ActIdx.BATT_RATE]:.3f}")
     print(f"  EV rate  ([0,1])   : {act[ActIdx.EV_RATE]:.3f}")
     print(f"  bid      ([0,1])   : {act[ActIdx.BID_PRICE]:.3f}")

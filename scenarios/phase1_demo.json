@@ -1,0 +1,54 @@
+{
+    "start_time": "2019-07-01T10:00:00",
+    "end_time": "2019-07-01T12:00:00",
+    "time_step_minutes": 1,
+    "random_seed": 7,
+    "neighborhood": {
+        "num_homes": 10,
+        "max_supported_nodes": 500,
+        "line_resistance_ohm_per_km": 0.64,
+        "min_edge_length_m": 40.0,
+        "max_edge_length_m": 120.0,
+        "base_voltage_v": 230.0,
+        "line_ampacity_a": 140.0
+    },
+    "adoption": {
+        "solar_ratio": 0.67,
+        "battery_ratio": 0.67,
+        "ev_ratio": 0.33
+    },
+    "load_profile": {
+        "target_daily_kwh": 6.2,
+        "target_daily_kwh_min": 5.0,
+        "target_daily_kwh_max": 7.5,
+        "gaussian_noise_sigma": 0.06,
+        "afternoon_ac_gain": 0.35,
+        "evening_peak_gain": 0.55,
+        "replace_solar_with_nsrdb": false,
+        "city": "bangalore",
+        "year": 2019
+    },
+    "transformer": {
+        "rated_power_kw": 50.0,
+        "ambient_temp_c": 34.0,
+        "delta_theta_to_r": 55.0,
+        "delta_theta_hs_r": 30.0,
+        "tau_to_min": 180.0,
+        "tau_w_min": 10.0,
+        "r_loss_ratio": 5.0,
+        "n_exp": 0.8,
+        "m_exp": 0.8,
+        "initial_top_oil_rise_c": 18.0,
+        "initial_hotspot_rise_c": 9.0
+    },
+    "faults": [
+        {
+            "event_type": "solar_dropout",
+            "name": "demo_cloud_transient",
+            "start": "2019-07-01T11:00:00",
+            "end": "2019-07-01T11:20:00",
+            "target": "all",
+            "params": { "drop_fraction": 0.75 }
+        }
+    ]
+}

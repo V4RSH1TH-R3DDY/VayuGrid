@@ -21,6 +21,7 @@ from typing import Any, cast
 import torch
 from torch.utils.data import DataLoader, Dataset
 
+from ai.demo import make_demo_gnn_config
 from ai.gnn.dataset import GNNSample, GraphDatasetGenerator
 from ai.gnn.vayu_gnn import (
     GNNTrainConfig,
@@ -41,6 +42,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--dry-run", action="store_true",
                         help="Run a quick smoke test with dummy data")
+    parser.add_argument("--demo", action="store_true",
+                        help="Demo mode: tiny scenario, 1 episode, 2 epochs")
     parser.add_argument("--num-episodes", type=int, default=10,
                         help="Number of simulator episodes for data generation")
     parser.add_argument("--use-pecan", action="store_true",
@@ -73,13 +76,29 @@ def train(args: argparse.Namespace) -> VayuGNN:
     checkpoint_dir = Path(args.checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
+    if args.use_pecan and not args.demo:
+        args.scenario = "scenarios/phase1_debug.json"
+        if args.num_episodes >= 10:
+            args.num_episodes = 1
+        if args.epochs >= 50:
+            args.epochs = 1
+        print(f"[train_vayugnn] Real-data mode: scenario={args.scenario},"
+              f" episodes={args.num_episodes}, epochs={args.epochs}")
+
+    if args.demo:
+        print("Demo mode: using reduced GNN config + dry-run data")
+        args.dry_run = True
+        args.epochs = 2
+        train_cfg = make_demo_gnn_config()
+    else:
+        train_cfg = GNNTrainConfig(
+            lr=args.lr,
+            epochs=args.epochs,
+            checkpoint_path=str(checkpoint_dir / "vayu_gnn_best.pt"),
+        )
+
     model = VayuGNN().to(device)
     loss_fn = VayuGNNLoss()
-    train_cfg = GNNTrainConfig(
-        lr=args.lr,
-        epochs=args.epochs,
-        checkpoint_path=str(checkpoint_dir / "vayu_gnn_best.pt"),
-    )
     trainer = VayuGNNTrainer(model=model, cfg=train_cfg, loss_fn=loss_fn, device=device)
 
     if args.dry_run:
