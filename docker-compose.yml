@@ -79,7 +79,7 @@ services:
           "CMD",
           "sh",
           "-c",
-          "wget -q -O- http://localhost:8200/v1/sys/health | grep initialized",
+          "wget -q -O- http://127.0.0.1:8200/v1/sys/health | grep initialized",
         ]
       interval: 10s
       timeout: 5s
